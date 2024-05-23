@@ -1,0 +1,102 @@
+# /**
+#  *******************************************************************************
+#  ** Copyright © 2022 tinztwins.de. All rights reserved.
+#  **
+#  ** Redistributions of source code must retain the above copyright notice,
+#  ** this condition and the following disclaimer.
+#  **
+#  ** This software is provided by the copyright holder and contributors
+#  ** and any warranties related to this software are DISCLAIMED.
+#  ** The copyright owner or contributors be NOT LIABLE for any damages caused
+#  ** by use of this software.
+#  *******************************************************************************
+#  */
+
+version: '3.7'
+services:
+  sftp:
+    image: ${SFTP_IMAGE}
+    container_name: sftp
+    restart: always
+    ports:
+      - "${SFTP_PORT}:22"
+    command:
+      - ${SFTP_USERNAME}:${SFTP_PASSWORD}:1001::${MLFLOW_ARTIFACT_STORE}   # syntax: user:password[:e][:uid[:gid[:dir1[,dir2]...]]]
+    volumes:
+      - ./${MLFLOW_ARTIFACT_STORE}:/home/${SFTP_USERNAME}/${MLFLOW_ARTIFACT_STORE}
+      - ./keys/ssh_host_rsa_key.pub:/home/${SFTP_USERNAME}/.ssh/ssh_host_rsa_key.pub:ro
+      - ./keys/ssh_host_ed25519_key.pub:/home/${SFTP_USERNAME}/.ssh/ssh_host_ed25519_key.pub:ro
+
+  mlflow:
+    build:
+      context: ./docker/mlflow
+    image: workspace/mlflow
+    container_name: mlflow
+    restart: on-failure
+    ports:
+      - "${MLFLOW_TRACKING_SERVER_PORT}:5000"
+    depends_on:
+      - postgres
+      - sftp
+    volumes:
+      - ./${MLFLOW_ARTIFACT_STORE}:/${MLFLOW_ARTIFACT_STORE}
+      - ./keys/ssh_host_rsa_key:/root/.ssh/ssh_host_rsa_key:ro
+      - ./keys/ssh_host_ed25519_key:/root/.ssh/ssh_host_ed25519_key:ro
+      - ./keys/config:/root/.ssh/config:ro
+    command: >
+      /bin/bash -c "sleep 3
+      && cd /root/.ssh
+      && ssh-keyscan ${SFTP_HOST} >> known_hosts
+      && cd /server
+      && ./wait-for-it.sh ${MLFLOW_BACKEND_STORE}:5432 -t ${WAIT_FOR_IT_TIMEOUT} -- mlflow server
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${MLFLOW_BACKEND_STORE}:5432/${POSTGRES_DATABASE}
+      --default-artifact-root sftp://${SFTP_USERNAME}:${SFTP_PASSWORD}@${SFTP_HOST}/${MLFLOW_ARTIFACT_STORE}
+      --host ${MLFLOW_TRACKING_SERVER_HOST}
+      --port 5000"
+
+  postgres:
+    build: ./docker/postgres
+    image: workspace/postgres
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - ./${POSTGRES_STORE}:/var/lib/postgresql/data
+
+  jupyter:
+    user: root
+    build:
+      context: ./docker/jupyter
+    image: workspace/jupyter
+    container_name: jupyter
+    restart: on-failure
+    ports:
+      - "${JUPYTER_PORT}:8888"
+    depends_on: 
+      - postgres
+      - mlflow
+      - sftp
+    environment:
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      JUPYTER_ENABLE_LAB: ${JUPYTER_ENABLE_LAB}
+      SFTP_HOST: ${SFTP_HOST}
+      JUPYTER_USERNAME: ${JUPYTER_USERNAME}
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN}
+    volumes:
+      - ./notebooks/:/home/${JUPYTER_USERNAME}/work
+      - ./keys/ssh_host_rsa_key:/home/${JUPYTER_USERNAME}/.ssh/ssh_host_rsa_key:ro
+      - ./keys/ssh_host_ed25519_key:/home/${JUPYTER_USERNAME}/.ssh/ssh_host_ed25519_key:ro
+      - ./keys/config:/home/${JUPYTER_USERNAME}/.ssh/config:ro
+
+  web:
+    build: ./web
+    command: python app.py
+    volumes:
+      - ./flask/:/web_flask
+      - ./notebooks/:/web_flask_data
+    ports:
+      - '8088:5000'

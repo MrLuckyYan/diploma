@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Главная страница
+{% endblock %}
+
+{% block body %}
+<div class="container my-3">
+
+    <h2>Определение показателя NDVI по прогнозу погоды</h2>
+
+    <div class="col-6 mx-auto">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="max_temp" class="form-label">Максимальная температура</label>
+                <input type="text" class="form-control" id="max_temp" name="max_temp" required placeholder="10">
+            </div>
+
+            <div class="mb-3">
+                <label for="min_temp" class="form-label">Минимальная температура</label>
+                <input type="text" class="form-control" id="min_temp" name="min_temp" required placeholder="2">
+            </div>
+
+            <div class="mb-3">
+                <label for="sred_temp" class="form-label">Средняя температура</label>
+                <input type="text" class="form-control" id="sred_temp" name="sred_temp" required placeholder="5">
+            </div>
+
+            <div class="mb-3">
+                <label for="pressue" class="form-label">Атмосферное давление</label>
+                <input type="text" class="form-control" id="pressue" name="pressue" required placeholder="1004">
+            </div>
+
+            <div class="mb-3">
+                <label for="vind_speed" class="form-label">Скорость ветра</label>
+                <input type="text" class="form-control" id="vind_speed" name="vind_speed" required placeholder="2">
+            </div>
+
+            <div class="mb-3">
+                <label for="rainfall" class="form-label">Осадки</label>
+                <input type="text" class="form-control" id="rainfall" name="rainfall" required placeholder="6">
+            </div>
+
+            <div class="mb-3">
+                <label for="eff_temp" class="form-label">Эффективная температура</label>
+                <input type="text" class="form-control" id="eff_temp" name="eff_temp" required placeholder="1">
+            </div>
+
+            <button type="submit" class="btn btn-primary">расчитать NDVI</button>
+        </form>
+    </div>
+
+    <div class="row">
+        Показатель NDVI: <b>{{ ndvi }}</b>
+    </div>
+</div>
+
+{% endblock %}
